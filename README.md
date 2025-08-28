@@ -1,13 +1,13 @@
-# ShareDB Expo SQLite Storage
+# ShareDB Node.js SQLite Storage
 
-A dedicated React Native storage adapter for [ShareDB's DurableStore](https://github.com/shaxpir/sharedb) using Expo SQLite, with support for dual-database architectures and connection pooling.
+A Node.js SQLite storage adapter for [ShareDB's DurableStore](https://github.com/shaxpir/sharedb) using better-sqlite3, with support for dual-database architectures and connection pooling.
 
 This package provides offline-first storage for the **DurableStore** system - a Shaxpir fork enhancement that enables client-side document persistence and offline operation queuing, not available in the original upstream ShareDB.
 
 ## Features
 
 - ✅ **DurableStore Integration** - Purpose-built for ShareDB's offline-first DurableStore system
-- ✅ **Expo SQLite Integration** - Native React Native SQLite storage for client-side persistence
+- ✅ **Better-SQLite3 Integration** - High-performance synchronous SQLite for Node.js
 - ✅ **Dual-Database Support** - Pre-initialized database connections with schema prefixes
 - ✅ **Connection Pooling** - Optional connection pooling for improved performance
 - ✅ **Cross-Database Queries** - JOIN operations between multiple databases
@@ -15,31 +15,32 @@ This package provides offline-first storage for the **DurableStore** system - a 
 - ✅ **Offline Operation Queuing** - Stores pending operations while offline for later sync
 - ✅ **Zero Migration** - Works with existing table schemas
 - ✅ **Production Ready** - Comprehensive error handling and monitoring
+- ✅ **CLI Support** - Perfect for command-line tools and server-side applications
 
 ## Installation
 
 ```bash
-npm install @shaxpir/sharedb-storage-expo-sqlite
+npm install @shaxpir/sharedb-storage-node-sqlite
 ```
 
-**Peer Dependencies** (automatically installed in Expo/React Native projects):
+**Peer Dependencies**:
 - `@shaxpir/sharedb >= 5.4.0` (Shaxpir fork with DurableStore support)
-- `expo-sqlite >= 14.0.0`
+- `better-sqlite3 >= 12.0.0`
 
 ## Quick Start
 
 ### Basic Usage
 
 ```javascript
-import { Connection } from '@shaxpir/sharedb/lib/client';
-import { ExpoSqliteStorage } from '@shaxpir/sharedb-storage-expo-sqlite';
+const { Connection } = require('@shaxpir/sharedb/lib/client');
+const SqliteStorage = require('@shaxpir/sharedb-storage-node-sqlite');
 
 // Create ShareDB connection
 const connection = new Connection(websocket);
 
 // Create storage for DurableStore
-const storage = new ExpoSqliteStorage({
-  namespace: 'myapp'  // Creates 'sharedb_myapp.db'
+const storage = new SqliteStorage({
+  namespace: 'myapp'  // Creates 'sharedb_myapp.sqlite'
 });
 
 // Enable offline-first DurableStore with SQLite persistence
@@ -48,67 +49,120 @@ connection.useDurableStore({ storage });
 
 ### Dual-Database Architecture
 
-Perfect for apps with both builtin read-only data and user-specific writable data:
+Perfect for CLI tools and applications with both read-only reference data and user-specific writable data:
 
 ```javascript
-import { ExpoSqliteStorage } from '@shaxpir/sharedb-storage-expo-sqlite';
-import { DatabaseServiceInit } from './services/database/DatabaseServiceInit';
-import { dbConnectionPool } from './services/database/DatabaseConnectionPool';
+const SqliteStorage = require('@shaxpir/sharedb-storage-node-sqlite');
+const { BetterSqliteAdapter } = SqliteStorage;
+const path = require('path');
 
-const storage = new ExpoSqliteStorage({
-  // Pre-initialized database with attached userdata
-  database: await DatabaseServiceInit.init(),
+// Initialize dictionary database (read-only)
+const dictDbPath = path.join(process.env.HOME, '.myapp', 'databases', 'dictionary.sqlite');
+const dictAdapter = new BetterSqliteAdapter(dictDbPath, { readonly: true });
+await dictAdapter.connect();
+
+// Initialize user database (read-write)
+const userDbPath = path.join(process.env.HOME, '.myapp', 'databases', `user_${userId}.sqlite`);
+const userAdapter = new BetterSqliteAdapter(userDbPath, { readonly: false });
+await userAdapter.connect();
+
+// Create storage with dual-database support
+const storage = new SqliteStorage({
+  adapter: userAdapter,  // Primary adapter for ShareDB data
   
-  // Route ShareDB collections to userdata schema
-  collectionMapping: (collection) => `userdata.${collection}`,
-  
-  // Optional: Use existing connection pool
-  connectionPool: dbConnectionPool,
+  // Route ShareDB collections to appropriate tables
+  collectionMapping: (collection) => `${collection}`,
   
   // Enable cross-database analytics queries
   enableCrossDbQueries: true
 });
 ```
 
-### Connection Pooling
-
-Use the built-in StandardSQLiteConnectionPool or inject your existing pool:
+### CLI Tool Example
 
 ```javascript
-import { ExpoSqliteStorage, StandardSQLiteConnectionPool } from '@shaxpir/sharedb-storage-expo-sqlite';
+const SqliteStorage = require('@shaxpir/sharedb-storage-node-sqlite');
+const { BetterSqliteAdapter } = SqliteStorage;
 
-// Option 1: Built-in connection pool
-const connectionPool = new StandardSQLiteConnectionPool({
-  createConnection: () => DatabaseServiceInit.init(),
-  maxConnections: 3,
-  minConnections: 1,
-  debug: true
-});
-
-// Option 2: Use your existing pool (dependency injection)
-const storage = new ExpoSqliteStorage({
-  database: await DatabaseServiceInit.init(),
-  connectionPool: yourExistingPool,  // Any pool with withConnection() method
-  collectionMapping: (collection) => `userdata.${collection}`
-});
+class CLIDatabaseService {
+  async initialize(userId) {
+    // Dictionary database in CLI databases directory
+    const dbDir = path.join(process.env.HOME, '.duiduidui-cli', 'databases');
+    const dictDbPath = path.join(dbDir, 'duiduidui-20250824a.sqlite');
+    
+    this.dictionaryAdapter = new BetterSqliteAdapter(dictDbPath, { 
+      readonly: true 
+    });
+    await this.dictionaryAdapter.connect();
+    
+    // User-specific database for ShareDB data
+    const userDbPath = path.join(dbDir, `sharedb_${userId}.sqlite`);
+    this.userDataAdapter = new BetterSqliteAdapter(userDbPath, { 
+      readonly: false 
+    });
+    await this.userDataAdapter.connect();
+    
+    console.log('✓ Dictionary database connected');
+    console.log('✓ User data database connected');
+  }
+}
 ```
 
 ## API Reference
 
-### ExpoSqliteStorage
+### BetterSqliteAdapter
+
+The Node.js-specific SQLite adapter using better-sqlite3:
+
+```javascript
+const { BetterSqliteAdapter } = require('@shaxpir/sharedb-storage-node-sqlite');
+
+const adapter = new BetterSqliteAdapter(dbPath, options);
+```
 
 #### Constructor Options
 
 ```javascript
-new ExpoSqliteStorage({
+new BetterSqliteAdapter(dbPath, {
+  readonly?: boolean,     // Open database in read-only mode
+  verbose?: boolean,      // Enable verbose logging
+  timeout?: number,       // Query timeout in milliseconds
+  fileMustExist?: boolean // Fail if database doesn't exist
+})
+```
+
+#### Methods
+
+```javascript
+// Lifecycle
+await adapter.connect();
+await adapter.disconnect();
+
+// Query execution
+await adapter.runAsync(sql, params);
+await adapter.getFirstAsync(sql, params);
+await adapter.getAllAsync(sql, params);
+
+// Transactions
+adapter.transaction((adapter, callback) => {
+  // Transaction operations
+}, callback);
+```
+
+### SqliteStorage
+
+#### Constructor Options
+
+```javascript
+new SqliteStorage({
   // Database options
-  database?: SQLiteDatabase,        // Pre-initialized database connection
+  adapter?: SqliteAdapter,          // Pre-initialized adapter
   namespace?: string,               // Database namespace for file-based DBs
   dbFileName?: string,              // Custom database filename
   dbFileDir?: string,               // Custom database directory
   
   // Dual-database options
-  schemaPrefix?: string,            // Schema prefix (e.g., 'userdata')
+  schemaPrefix?: string,            // Schema prefix
   collectionMapping?: (collection: string) => string,  // Collection mapping function
   enableCrossDbQueries?: boolean,   // Enable cross-DB queries (default: true)
   
@@ -124,147 +178,125 @@ new ExpoSqliteStorage({
 })
 ```
 
-#### Methods
-
-```javascript
-// Cross-database analytics queries
-storage.executeCrossDbQuery(sql, params, callback);
-
-// Connection pool operations
-storage.withPooledConnection(operation, callback);
-
-// Storage statistics
-storage.getStats(callback);
-
-// Standard ShareDB storage methods
-storage.writeRecords(recordsByType, callback);
-storage.readRecord(storeName, recordId, callback);
-// ... (see ShareDB documentation for complete API)
-```
-
-### StandardSQLiteConnectionPool
-
-```javascript
-new StandardSQLiteConnectionPool({
-  createConnection: () => Promise<SQLiteDatabase>,  // Required
-  destroyConnection?: (conn) => Promise<void>,      // Optional
-  validateConnection?: (conn) => Promise<boolean>,  // Optional
-  
-  maxConnections?: number,          // Default: 5
-  minConnections?: number,          // Default: 2
-  acquireTimeout?: number,          // Default: 5000ms
-  idleTimeout?: number,            // Default: 30000ms
-  debug?: boolean                  // Default: false
-});
-```
-
 ## Usage Patterns
 
 ### Pattern 1: Simple File-Based Storage
 
 ```javascript
-const storage = new ExpoSqliteStorage({
+const storage = new SqliteStorage({
   namespace: 'myapp',
-  useEncryption: true,
-  encryptionCallback: (data) => encrypt(data, encryptionKey)
+  dbFileDir: path.join(process.env.HOME, '.myapp', 'data')
 });
 ```
 
-### Pattern 2: Dual-Database with Builtin + Userdata
+### Pattern 2: Server-Side with Authentication
 
 ```javascript
-// Your database initialization
-const db = await DatabaseServiceInit.init();  // Sets up main + attached userdata DB
+class ServerDatabaseService {
+  async createUserStorage(userId, jwtToken) {
+    const dbPath = path.join(this.userDbDir, `user_${userId}.sqlite`);
+    
+    const adapter = new BetterSqliteAdapter(dbPath);
+    await adapter.connect();
+    
+    return new SqliteStorage({
+      adapter,
+      collectionMapping: (collection) => {
+        // Map ShareDB collections to your schema
+        if (collection === 'documents') return 'user_documents';
+        if (collection === 'settings') return 'user_settings';
+        return collection;
+      }
+    });
+  }
+}
+```
 
-const storage = new ExpoSqliteStorage({
-  database: db,                                 // Pre-initialized connection
-  collectionMapping: (collection) => {
-    // Map ShareDB collections to your existing tables
-    if (collection === 'terms') return 'userdata.term';
-    if (collection === 'notes') return 'userdata.note';
-    return `userdata.${collection}`;
-  },
-  enableCrossDbQueries: true
+### Pattern 3: Testing and Development
+
+```javascript
+const Database = require('better-sqlite3');
+
+// In-memory database for testing
+const testDb = new Database(':memory:');
+const adapter = new BetterSqliteAdapter(':memory:');
+
+const storage = new SqliteStorage({
+  adapter,
+  debug: true
 });
 
-// Now you can run analytics queries across both databases
-storage.executeCrossDbQuery(`
-  SELECT 
-    u.data as user_term,
-    p.translation,
-    p.learn_rank
-  FROM userdata.term u
-  JOIN phrase p ON json_extract(u.data, '$.payload.text') = p.text
-  WHERE p.learn_rank BETWEEN ? AND ?
-`, [1, 1000], (error, results) => {
-  console.log('Cross-database analytics:', results);
-});
+// Run tests...
 ```
 
-### Pattern 3: Connection Pooling for Performance
+## Migration from React Native Package
+
+If you're migrating from the React Native package to Node.js:
+
+### Before (React Native)
+```javascript
+import { ExpoSqliteStorage } from '@shaxpir/sharedb-storage-expo-sqlite';
+import * as SQLite from 'expo-sqlite';
+```
+
+### After (Node.js)
+```javascript
+const SqliteStorage = require('@shaxpir/sharedb-storage-node-sqlite');
+const { BetterSqliteAdapter } = SqliteStorage;
+```
+
+Key differences:
+- Uses `better-sqlite3` instead of `expo-sqlite`
+- Synchronous API instead of async (better-sqlite3 is synchronous)
+- File-based databases instead of app-sandboxed storage
+- Can access any file path on the system
+
+## Testing
+
+```bash
+# Run tests
+npm test
+
+# Run with coverage
+npm run test-cover
+
+# Run specific test
+npm test -- --grep "BetterSqliteAdapter"
+```
+
+## Performance Considerations
+
+- **Synchronous API**: better-sqlite3 is synchronous, which simplifies code but blocks the event loop
+- **WAL Mode**: Enable Write-Ahead Logging for better concurrency
+- **Connection Pooling**: Consider pooling for multi-user server applications
+- **Prepared Statements**: Use prepared statements for repeated queries
+
+Example optimization:
 
 ```javascript
-// Reuse your existing connection pool
-import { dbConnectionPool } from './DatabaseConnectionPool';
+const adapter = new BetterSqliteAdapter(dbPath);
+await adapter.connect();
 
-const storage = new ExpoSqliteStorage({
-  database: await DatabaseServiceInit.init(),
-  connectionPool: dbConnectionPool,  // Dependency injection!
-  collectionMapping: (collection) => `userdata.${collection}`
-});
+// Enable WAL mode for better performance
+adapter.db.pragma('journal_mode = WAL');
 
-// Heavy operations automatically use pooled connections
-storage.executeCrossDbQuery(heavyAnalyticsQuery, params, callback);
+// Use prepared statements
+const stmt = adapter.db.prepare('SELECT * FROM users WHERE id = ?');
+const user = stmt.get(userId);
 ```
-
-## Migration from Core ShareDB
-
-If you're currently using React Native storage from the core ShareDB package:
-
-### Before
-```javascript
-import { Connection } from '@shaxpir/sharedb/lib/client';
-import { ExpoSqliteStorage } from '@shaxpir/sharedb';  // ❌ No longer available
-```
-
-### After  
-```javascript
-import { Connection } from '@shaxpir/sharedb/lib/client';
-import { ExpoSqliteStorage } from '@shaxpir/sharedb-storage-expo-sqlite';  // ✅ Dedicated package
-```
-
-**That's it!** All your existing configuration and usage patterns remain exactly the same.
-
-## Documentation
-
-- [Dual-Database Integration Guide](docs/DUAL_DATABASE_GUIDE.md)
-- [Connection Pooling Guide](docs/CONNECTION_POOLING_GUIDE.md)
-- [Migration Guide](docs/MIGRATION_GUIDE.md)
-- [API Reference](docs/API_REFERENCE.md)
-
-## Examples
-
-Check out the `/test` directory for comprehensive usage examples, including:
-- Basic storage operations
-- Dual-database integration patterns
-- Connection pooling configurations
-- Cross-database query examples
-- Mock testing strategies
 
 ## Requirements
 
-- React Native with Expo
 - Node.js >= 14.0.0
 - ShareDB >= 5.4.0
-- Expo SQLite >= 14.0.0
+- better-sqlite3 >= 12.0.0
 
 ## Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Run tests: `npm test`
-4. Lint code: `npm run lint`
-5. Submit a pull request
+4. Submit a pull request
 
 ## License
 
@@ -273,9 +305,9 @@ MIT © [Shaxpir Inc](https://shaxpir.com)
 ---
 
 **Related Projects:**
-- [Shaxpir ShareDB Fork](https://github.com/shaxpir/sharedb) - Enhanced ShareDB with DurableStore support (required peer dependency)
-- [Original ShareDB](https://github.com/share/sharedb) - Upstream ShareDB project (without DurableStore)
-- [DurableStore Documentation](https://github.com/shaxpir/sharedb/blob/pluggable-store/DURABLE_STORE_GUIDE.md) - Offline-first client persistence guide
+- [@shaxpir/sharedb-storage-expo-sqlite](https://github.com/shaxpir/sharedb-storage-expo-sqlite) - React Native/Expo companion package
+- [Shaxpir ShareDB Fork](https://github.com/shaxpir/sharedb) - Enhanced ShareDB with DurableStore support
+- [Original ShareDB](https://github.com/share/sharedb) - Upstream ShareDB project
 
 **Package Relationship:**
-This package provides React Native storage for the **DurableStore** system in `@shaxpir/sharedb`. The DurableStore enables offline-first document persistence and operation queuing - a key enhancement not available in the original upstream ShareDB. This storage was extracted to avoid bundling conflicts in browser/Node.js environments while providing optimized React Native support.
+This package provides Node.js/CLI storage for the **DurableStore** system in `@shaxpir/sharedb`. It was separated from the React Native package to avoid bundling conflicts and provide optimized Node.js support with better-sqlite3.
