@@ -1,0 +1,77 @@
+{
+  "name": "@shaxpir/sharedb-storage-node-sqlite",
+  "version": "1.0.0",
+  "description": "Node.js SQLite storage adapter for ShareDB with better-sqlite3",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "keywords": [
+    "sharedb",
+    "node",
+    "sqlite",
+    "better-sqlite3",
+    "offline",
+    "storage",
+    "database",
+    "realtime",
+    "collaborative",
+    "operational-transform"
+  ],
+  "author": "Benji Smith <benji@shaxpir.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/shaxpir/sharedb-storage-node-sqlite.git"
+  },
+  "bugs": {
+    "url": "https://github.com/shaxpir/sharedb-storage-node-sqlite/issues"
+  },
+  "homepage": "https://github.com/shaxpir/sharedb-storage-node-sqlite#readme",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "peerDependencies": {
+    "@shaxpir/sharedb": ">=6.0.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.2.0",
+    "generic-pool": "^3.9.0"
+  },
+  "devDependencies": {
+    "async": "^3.2.4",
+    "chai": "^4.3.7",
+    "fake-indexeddb": "^6.1.0",
+    "mocha": "^10.2.0",
+    "nyc": "^15.1.0",
+    "sinon": "^15.2.0",
+    "sinon-chai": "^3.7.0"
+  },
+  "files": [
+    "lib/",
+    "test/",
+    "docs/",
+    "index.js",
+    "index.d.ts",
+    "README.md",
+    "PROJECT_PLAN.md"
+  ],
+  "scripts": {
+    "test": "mocha",
+    "test-cover": "nyc --temp-dir=coverage -r text -r lcov npm test",
+    "prepare": "npm test",
+    "prepack": "npm test"
+  },
+  "mocha": {
+    "recursive": true,
+    "timeout": 5000,
+    "spec": "test/**/*-test.js"
+  },
+  "nyc": {
+    "exclude": [
+      "test/**"
+    ],
+    "reporter": [
+      "text",
+      "lcov"
+    ]
+  }
+}
