@@ -10,11 +10,15 @@ The attachment mode allows you to use SQLite's ATTACH DATABASE feature to connec
 2. Enable cross-database queries between your app's data and ShareDB documents
 3. Maintain different backup/sync strategies for different databases
 
-## Important: Index Creation Requirements
+## Automatic Index Creation
 
-**SQLite does not support creating indexes with `database.table` notation in CREATE INDEX statements.** This means indexes MUST be created directly in the ShareDB database before it's attached. 
+The attachment system automatically handles index creation for optimal performance. When a database is attached for the first time, the adapter coordinates with the schema strategy to:
 
-To ensure proper performance, you must initialize your ShareDB database with all necessary indexes before using it in attachment mode. We provide the `sharedb-initializer` utility for this purpose.
+1. Detect if the database needs initialization
+2. Create all required tables and indexes directly in the database
+3. Attach the fully-initialized database
+
+This automatic process ensures indexes are properly created before attachment, as SQLite doesn't support `database.table` notation in CREATE INDEX statements.
 
 ## Components
 
