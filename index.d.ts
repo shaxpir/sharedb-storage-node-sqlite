@@ -99,6 +99,17 @@ declare namespace ShareDBSQLiteStorage {
     new (dbPath: string, options?: any): BetterSqliteAdapter;
   }
 
+  // Node.js SQLite Adapter
+  interface NodeSqliteAdapter extends SqliteAdapter {
+    readonly dbPath: string;
+    readonly options: any;
+    readonly debug: boolean;
+  }
+
+  interface NodeSqliteAdapterStatic {
+    new (dbPath: string, options?: any): NodeSqliteAdapter;
+  }
+
 
 
 
@@ -159,6 +170,53 @@ declare namespace ShareDBSQLiteStorage {
     new (options: CollectionPerTableStrategyOptions): CollectionPerTableStrategy;
   }
 
+  // ===============================
+  // Attachment Support
+  // ===============================
+
+  interface DatabaseAttachment {
+    path?: string;
+    fileName?: string;
+    dirPath?: string;
+    alias: string;
+    strategy?: SchemaStrategy;
+  }
+
+  interface AttachedSqliteAdapter extends SqliteAdapter {
+    readonly attachments: DatabaseAttachment[];
+    readonly attached: boolean;
+    attachSingleDatabase(attachment: DatabaseAttachment): Promise<void>;
+    preInitializeDatabase(attachment: DatabaseAttachment): Promise<void>;
+  }
+
+  interface AttachmentConfig {
+    path: string;
+    alias: string;
+    strategy?: SchemaStrategy;
+  }
+
+  interface AttachedBetterSqliteAdapterOptions {
+    attachments: AttachmentConfig[];
+  }
+
+  interface AttachedBetterSqliteAdapter extends AttachedSqliteAdapter {
+    readonly database: any;
+  }
+
+  interface AttachedBetterSqliteAdapterStatic {
+    new (dbPath: string, options?: AttachedBetterSqliteAdapterOptions, readonly?: boolean): AttachedBetterSqliteAdapter;
+  }
+
+  interface AttachedCollectionPerTableStrategy extends CollectionPerTableStrategy {
+    attachmentAlias: string | null;
+    preInitializeDatabase(db: any, strategy: AttachedCollectionPerTableStrategy, callback?: Callback): Promise<void>;
+  }
+
+  interface AttachedCollectionPerTableStrategyStatic {
+    new (attachmentAlias?: string): AttachedCollectionPerTableStrategy;
+    preInitializeDatabase(db: any, strategy: AttachedCollectionPerTableStrategy, callback?: Callback): Promise<void>;
+  }
+
 }
 
 // ===============================
@@ -171,6 +229,9 @@ declare const SqliteStorage: ShareDBSQLiteStorage.SqliteStorageStatic & {
   SqliteStorage: ShareDBSQLiteStorage.SqliteStorageStatic;
   ExpoSqliteAdapter: ShareDBSQLiteStorage.ExpoSqliteAdapterStatic;
   BetterSqliteAdapter: ShareDBSQLiteStorage.BetterSqliteAdapterStatic;
+  NodeSqliteAdapter: ShareDBSQLiteStorage.NodeSqliteAdapterStatic;
+  AttachedBetterSqliteAdapter: ShareDBSQLiteStorage.AttachedBetterSqliteAdapterStatic;
+  AttachedCollectionPerTableStrategy: ShareDBSQLiteStorage.AttachedCollectionPerTableStrategyStatic;
   DefaultSchemaStrategy: ShareDBSQLiteStorage.DefaultSchemaStrategyStatic;
   CollectionPerTableStrategy: ShareDBSQLiteStorage.CollectionPerTableStrategyStatic;
 };
@@ -188,22 +249,10 @@ export type SqliteAdapter = ShareDBSQLiteStorage.SqliteAdapter;
 export type SqliteSchemaStrategy = ShareDBSQLiteStorage.SchemaStrategy;
 export type CollectionConfig = ShareDBSQLiteStorage.CollectionConfig;
 
-// ===============================
-// Legacy Exports (DEPRECATED - use direct imports)
-// ===============================
-export namespace Types {
-  /** @deprecated Import DurableStorage directly */
-  export type Storage = DurableStorage;
-  /** @deprecated Import DurableStorageRecord directly */
-  export type StorageRecord = DurableStorageRecord;
-  /** @deprecated Import DurableStorageRecords directly */
-  export type StorageRecords = DurableStorageRecords;
-  /** @deprecated Import SqliteAdapter directly */
-  export type SqliteAdapter = ShareDBSQLiteStorage.SqliteAdapter;
-  /** @deprecated Import SqliteSchemaStrategy directly */
-  export type SchemaStrategy = SqliteSchemaStrategy;
-  /** @deprecated Import CollectionConfig directly */
-  export type CollectionConfig = ShareDBSQLiteStorage.CollectionConfig;
-  /** @deprecated Import DurableStorageCallback directly */
-  export type Callback<T = any> = DurableStorageCallback<T>;
-}
+// Attachment support exports
+export type AttachedSqliteAdapter = ShareDBSQLiteStorage.AttachedSqliteAdapter;
+export type AttachedBetterSqliteAdapter = ShareDBSQLiteStorage.AttachedBetterSqliteAdapter;
+export type AttachedCollectionPerTableStrategy = ShareDBSQLiteStorage.AttachedCollectionPerTableStrategy;
+export type DatabaseAttachment = ShareDBSQLiteStorage.DatabaseAttachment;
+export type AttachmentConfig = ShareDBSQLiteStorage.AttachmentConfig;
+
