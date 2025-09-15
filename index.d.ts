@@ -117,9 +117,20 @@ declare namespace ShareDBSQLiteStorage {
   // Schema Strategies
   // ===============================
 
+  interface ArrayProjectionConfig {
+    type: 'array_expansion';
+    targetTable: string;
+    mapping: {
+      [targetColumn: string]: string; // JSON path or empty for array element
+    };
+    arrayPath: string;
+    primaryKey: string[];
+  }
+
   interface CollectionConfig {
     indexes: string[];
     encryptedFields: string[];
+    projections?: ArrayProjectionConfig[];
   }
 
   interface SchemaStrategyOptions {
@@ -161,9 +172,15 @@ declare namespace ShareDBSQLiteStorage {
 
   interface CollectionPerTableStrategy extends SchemaStrategy {
     readonly collectionConfig: { [collection: string]: CollectionConfig };
-    
+    readonly projectionsByCollection: { [collection: string]: ArrayProjectionConfig[] };
+
     getTableName(collection: string): string;
     ensureCollectionTable(db: DatabaseConnection, collection: string, callback: Callback): void;
+    parseProjections(collectionConfig: { [collection: string]: CollectionConfig }): { [collection: string]: ArrayProjectionConfig[] };
+    createProjectionTables(db: DatabaseConnection, collection: string): Promise<void>;
+    updateProjections(db: DatabaseConnection, collection: string, newRecord: any, oldRecord: any): Promise<void>;
+    updateArrayExpansionProjection(db: DatabaseConnection, projection: ArrayProjectionConfig, newRecord: any, oldRecord: any): Promise<void>;
+    deleteProjections(db: DatabaseConnection, collection: string, recordId: string): Promise<void>;
   }
 
   interface CollectionPerTableStrategyStatic {
@@ -210,6 +227,9 @@ declare namespace ShareDBSQLiteStorage {
   interface AttachedCollectionPerTableStrategy extends CollectionPerTableStrategy {
     attachmentAlias: string | null;
     preInitializeDatabase(db: any, strategy: AttachedCollectionPerTableStrategy, callback?: Callback): Promise<void>;
+    createProjectionTablesAttached(db: DatabaseConnection, collection: string): Promise<void>;
+    updateArrayExpansionProjection(db: DatabaseConnection, projection: ArrayProjectionConfig, newRecord: any, oldRecord: any): Promise<void>;
+    deleteProjections(db: DatabaseConnection, collection: string, recordId: string): Promise<void>;
   }
 
   interface AttachedCollectionPerTableStrategyStatic {
