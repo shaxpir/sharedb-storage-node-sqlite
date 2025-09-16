@@ -117,14 +117,26 @@ declare namespace ShareDBSQLiteStorage {
   // Schema Strategies
   // ===============================
 
+  interface ProjectionColumnMapping {
+    source: string | '@element';  // JSON path or '@element' for the array element itself
+    dataType?: 'TEXT' | 'INTEGER' | 'REAL' | 'BLOB';  // SQLite datatype (default: TEXT)
+  }
+
+  interface ProjectionIndexConfig {
+    columns: string[];  // Column(s) to index
+    unique?: boolean;   // Create a unique index
+    name?: string;      // Optional custom index name
+  }
+
   interface ArrayProjectionConfig {
     type: 'array_expansion';
     targetTable: string;
     mapping: {
-      [targetColumn: string]: string; // JSON path or empty for array element
+      [targetColumn: string]: string | ProjectionColumnMapping;  // Backwards compatible
     };
     arrayPath: string;
     primaryKey: string[];
+    indexes?: ProjectionIndexConfig[];  // Additional indexes
   }
 
   interface CollectionConfig {
@@ -268,6 +280,9 @@ export type { DurableStorage, DurableStorageRecord, DurableStorageRecords, Durab
 export type SqliteAdapter = ShareDBSQLiteStorage.SqliteAdapter;
 export type SqliteSchemaStrategy = ShareDBSQLiteStorage.SchemaStrategy;
 export type CollectionConfig = ShareDBSQLiteStorage.CollectionConfig;
+export type ProjectionColumnMapping = ShareDBSQLiteStorage.ProjectionColumnMapping;
+export type ProjectionIndexConfig = ShareDBSQLiteStorage.ProjectionIndexConfig;
+export type ArrayProjectionConfig = ShareDBSQLiteStorage.ArrayProjectionConfig;
 
 // Attachment support exports
 export type AttachedSqliteAdapter = ShareDBSQLiteStorage.AttachedSqliteAdapter;
