@@ -3,11 +3,16 @@ const fs = require('fs');
 const path = require('path');
 const AttachedBetterSqliteAdapter = require('../lib/adapters/attached-better-sqlite-adapter');
 const BetterSqliteAdapter = require('../lib/adapters/better-sqlite-adapter');
-const AttachedCollectionPerTableStrategy = require('../lib/schema/attached-collection-per-table-strategy');
-const SqliteStorage = require('../lib/sqlite-storage');
+const AttachedCollectionPerTableStrategy = require('..').AttachedCollectionPerTableStrategy;
+const SqliteStorage = require('..');
+const { cleanupTestDatabases } = require('./test-cleanup');
 
 describe('AttachedBetterSqliteAdapter', function() {
   const TEST_DIR = path.join(__dirname, 'test-databases');
+
+  after(function() {
+    cleanupTestDatabases();
+  });
   const PRIMARY_DB = path.join(TEST_DIR, 'test-primary.db');
   const ATTACHED_DB = path.join(TEST_DIR, 'test-attached.db');
   
@@ -350,11 +355,12 @@ describe('AttachedBetterSqliteAdapter', function() {
         );
         
         // Create strategy with collection config that includes indexes
+        // Using realistic field paths that match actual ShareDB document structure
         const strategy = new AttachedCollectionPerTableStrategy({
           attachmentAlias: 'sharedb',
           collectionConfig: {
             'test_collection': {
-              indexes: ['field1', 'field2', 'field3']
+              indexes: ['payload.data.field1', 'payload.data.field2', 'payload.data.field3']
             }
           }
         });
@@ -387,10 +393,10 @@ describe('AttachedBetterSqliteAdapter', function() {
         assert(indexNames.includes('idx_inventory_collection'));
         assert(indexNames.includes('idx_inventory_updated'));
         
-        // Should have collection indexes
-        assert(indexNames.includes('test_collection_field1_idx'));
-        assert(indexNames.includes('test_collection_field2_idx'));
-        assert(indexNames.includes('test_collection_field3_idx'));
+        // Should have collection indexes with idx_ prefix and payload.data in the path
+        assert(indexNames.includes('idx_test_collection_payload_data_field1'));
+        assert(indexNames.includes('idx_test_collection_payload_data_field2'));
+        assert(indexNames.includes('idx_test_collection_payload_data_field3'));
         
         // Verify tables were created
         const tables = await adapter.getAllAsync(

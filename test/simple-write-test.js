@@ -1,18 +1,28 @@
 const expect = require('chai').expect;
 const path = require('path');
 const fs = require('fs');
-const SqliteStorage = require('../lib/sqlite-storage');
+const SqliteStorage = require('..');
 const BetterSqliteAdapter = require('../lib/adapters/better-sqlite-adapter');
-const CollectionPerTableStrategy = require('../lib/schema/collection-per-table-strategy');
+const CollectionPerTableStrategy = require('..').CollectionPerTableStrategy;
+const { cleanupTestDatabases } = require('./test-cleanup');
 
 describe('Simple Write Test', function() {
   this.timeout(10000);
-  
+
+  after(function() {
+    cleanupTestDatabases();
+  });
+
   it('CollectionPerTableStrategy should write without errors', function(done) {
     const testDbDir = path.join(__dirname, 'test-databases');
     const testDbFile = 'simple-write.db';
     const testDbPath = path.join(testDbDir, testDbFile);
-    
+
+    // Create test directory if it doesn't exist
+    if (!fs.existsSync(testDbDir)) {
+      fs.mkdirSync(testDbDir, { recursive: true });
+    }
+
     // Clean up
     if (fs.existsSync(testDbPath)) {
       fs.unlinkSync(testDbPath);

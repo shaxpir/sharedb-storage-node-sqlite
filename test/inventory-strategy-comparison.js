@@ -1,10 +1,10 @@
 const expect = require('chai').expect;
 const path = require('path');
 const fs = require('fs');
-const SqliteStorage = require('../lib/sqlite-storage');
+const SqliteStorage = require('..');
 const BetterSqliteAdapter = require('../lib/adapters/better-sqlite-adapter');
-const DefaultSchemaStrategy = require('../lib/schema/default-schema-strategy');
-const CollectionPerTableStrategy = require('../lib/schema/collection-per-table-strategy');
+const DefaultSchemaStrategy = require('..').DefaultSchemaStrategy;
+const CollectionPerTableStrategy = require('..').CollectionPerTableStrategy;
 
 describe('Inventory Strategy Comparison', function() {
   this.timeout(10000);

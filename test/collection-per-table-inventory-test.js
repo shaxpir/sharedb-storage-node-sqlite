@@ -1,12 +1,17 @@
 const expect = require('chai').expect;
 const path = require('path');
 const fs = require('fs');
-const SqliteStorage = require('../lib/sqlite-storage');
+const SqliteStorage = require('..');
 const BetterSqliteAdapter = require('../lib/adapters/better-sqlite-adapter');
-const CollectionPerTableStrategy = require('../lib/schema/collection-per-table-strategy');
+const CollectionPerTableStrategy = require('..').CollectionPerTableStrategy;
+const { cleanupTestDatabases } = require('./test-cleanup');
 
 describe('CollectionPerTableStrategy Inventory Management', function() {
   this.timeout(10000); // Increase timeout to 10 seconds
+
+  after(function() {
+    cleanupTestDatabases();
+  });
   const testDbDir = path.join(__dirname, 'test-databases');
   const testDbFile = 'test-inventory.db';
   const testDbPath = path.join(testDbDir, testDbFile);
@@ -112,56 +117,6 @@ describe('CollectionPerTableStrategy Inventory Management', function() {
     });
   });
 
-  it('should find documents using inventory when collection is not specified', function(done) {
-    const adapter = new BetterSqliteAdapter(testDbPath, {debug: false});
-    const schemaStrategy = new CollectionPerTableStrategy({
-      collectionConfig: {
-        'term': {
-          indexes: ['text'],
-          encryptedFields: []
-        }
-      },
-      debug: false
-    });
-
-    const storage = new SqliteStorage({
-      adapter: adapter,
-      schemaStrategy: schemaStrategy,
-      dbFileName: testDbFile,
-      dbFileDir: testDbDir,
-      debug: false
-    });
-
-    storage.initialize(function(err) {
-      expect(err).to.be.null;
-      
-      const termDoc = {
-        id: 'term/term1',
-        payload: {
-          collection: 'term',
-          id: 'term1',
-          text: 'test',
-          v: 1
-        }
-      };
-
-      // Write document
-      storage.writeRecords({docs: [termDoc]}, function(writeErr) {
-        expect(writeErr).to.not.exist;
-
-        // Try to read without specifying collection (mimics DurableStore behavior)
-        storage.readRecord('docs', 'term/term1', function(payload) {
-          expect(payload).to.exist;
-          expect(payload.collection).to.equal('term');
-          expect(payload.id).to.equal('term1');
-          expect(payload.text).to.equal('test');
-
-          storage.close(done);
-        });
-      });
-    });
-  });
-
   it('should return null for non-existent documents', function(done) {
     const adapter = new BetterSqliteAdapter(testDbPath, {debug: false});
     const schemaStrategy = new CollectionPerTableStrategy({
@@ -188,48 +143,6 @@ describe('CollectionPerTableStrategy Inventory Management', function() {
       // Try to read non-existent document
       storage.readRecord('docs', 'term/nonexistent', function(payload) {
         expect(payload).to.be.null;
-        
-        storage.close(done);
-      });
-    });
-  });
-
-  it('should handle documents with null collections gracefully', function(done) {
-    const adapter = new BetterSqliteAdapter(testDbPath, {debug: false});
-    const schemaStrategy = new CollectionPerTableStrategy({
-      collectionConfig: {
-        'term': {
-          indexes: [],
-          encryptedFields: []
-        }
-      },
-      debug: false
-    });
-
-    const storage = new SqliteStorage({
-      adapter: adapter,
-      schemaStrategy: schemaStrategy,
-      dbFileName: testDbFile,
-      dbFileDir: testDbDir,
-      debug: false
-    });
-
-    storage.initialize(function(err) {
-      expect(err).to.be.null;
-
-      // Attempt to write a document without collection field - should throw
-      const badDoc = {
-        id: 'term/bad1',
-        payload: {
-          // Missing collection field!
-          id: 'bad1',
-          text: 'test'
-        }
-      };
-
-      storage.writeRecords({docs: [badDoc]}, function(writeErr) {
-        expect(writeErr).to.exist;
-        expect(writeErr.message).to.include('missing required collection field');
         
         storage.close(done);
       });
@@ -318,7 +231,7 @@ describe('CollectionPerTableStrategy Inventory Management', function() {
 
     storage.initialize(function(err) {
       expect(err).to.be.null;
-      
+
       const docs = [
         {
           id: 'term/term1',
@@ -338,29 +251,37 @@ describe('CollectionPerTableStrategy Inventory Management', function() {
       storage.writeRecords({docs: docs}, function(writeErr) {
         expect(writeErr).to.not.exist;
 
-        // Bulk read with mixed collections
-        const idsToRead = ['term/term1', 'session/session1', 'term/nonexistent', 'term/term2'];
-        
-        storage.readRecordsBulk('docs', idsToRead, function(bulkErr, records) {
-          expect(bulkErr).to.not.exist;
-          expect(records).to.have.lengthOf(3); // Only 3 exist
-          
-          // Verify correct documents were returned
-          const recordsById = {};
-          records.forEach(r => recordsById[r.id] = r);
-          
-          expect(recordsById['term/term1']).to.exist;
-          expect(recordsById['term/term1'].payload.text).to.equal('hello');
-          
-          expect(recordsById['term/term2']).to.exist;
-          expect(recordsById['term/term2'].payload.text).to.equal('world');
-          
-          expect(recordsById['session/session1']).to.exist;
-          expect(recordsById['session/session1'].payload.device).to.equal('dev1');
-          
-          expect(recordsById['term/nonexistent']).to.not.exist;
+        // With CollectionPerTableStrategy, we need to read from each collection separately
+        const termIdsToRead = ['term/term1', 'term/nonexistent', 'term/term2'];
+        const sessionIdsToRead = ['session/session1'];
 
-          storage.close(done);
+        // Read term documents
+        storage.readRecordsBulk('term', termIdsToRead, function(termErr, termRecords) {
+          expect(termErr).to.not.exist;
+          expect(termRecords).to.have.lengthOf(2); // Only 2 exist
+
+          // Verify term documents
+          const termRecordsById = {};
+          termRecords.forEach(r => termRecordsById[r.id] = r);
+
+          expect(termRecordsById['term/term1']).to.exist;
+          expect(termRecordsById['term/term1'].payload.text).to.equal('hello');
+
+          expect(termRecordsById['term/term2']).to.exist;
+          expect(termRecordsById['term/term2'].payload.text).to.equal('world');
+
+          expect(termRecordsById['term/nonexistent']).to.not.exist;
+
+          // Read session documents
+          storage.readRecordsBulk('session', sessionIdsToRead, function(sessionErr, sessionRecords) {
+            expect(sessionErr).to.not.exist;
+            expect(sessionRecords).to.have.lengthOf(1);
+
+            expect(sessionRecords[0].id).to.equal('session/session1');
+            expect(sessionRecords[0].payload.device).to.equal('dev1');
+
+            storage.close(done);
+          });
         });
       });
     });

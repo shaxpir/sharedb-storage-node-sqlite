@@ -1,7 +1,7 @@
 const expect = require('chai').expect;
-const SqliteStorage = require('../lib/sqlite-storage');
-const DefaultSchemaStrategy = require('../lib/schema/default-schema-strategy');
-const CollectionPerTableStrategy = require('../lib/schema/collection-per-table-strategy');
+const SqliteStorage = require('..');
+const DefaultSchemaStrategy = require('..').DefaultSchemaStrategy;
+const CollectionPerTableStrategy = require('..').CollectionPerTableStrategy;
 const BetterSqliteAdapter = require('../lib/adapters/better-sqlite-adapter');
 
 describe('Architectural Validation - SQLite Storage', function() {
@@ -100,7 +100,6 @@ describe('Architectural Validation - SQLite Storage', function() {
     });
 
     it('should use error-first callback convention consistently', function(done) {
-    const testDbPath = path.join(__dirname, 'test-databases', 'architectural-validation.db');
       const testRecord = {
         id: 'callback-test-1',
         payload: { title: 'Callback Test', data: { test: true } }

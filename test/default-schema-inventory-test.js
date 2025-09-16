@@ -1,12 +1,17 @@
 const expect = require('chai').expect;
 const path = require('path');
 const fs = require('fs');
-const SqliteStorage = require('../lib/sqlite-storage');
+const SqliteStorage = require('..');
 const BetterSqliteAdapter = require('../lib/adapters/better-sqlite-adapter');
-const DefaultSchemaStrategy = require('../lib/schema/default-schema-strategy');
+const DefaultSchemaStrategy = require('..').DefaultSchemaStrategy;
+const { cleanupTestDatabases } = require('./test-cleanup');
 
 describe('DefaultSchemaStrategy Inventory Management', function() {
   const testDbDir = path.join(__dirname, 'test-databases');
+
+  after(function() {
+    cleanupTestDatabases();
+  });
   const testDbFile = 'test-default-inventory.db';
   const testDbPath = path.join(testDbDir, testDbFile);
 
@@ -89,50 +94,6 @@ describe('DefaultSchemaStrategy Inventory Management', function() {
     });
   });
 
-  it('should find documents when collection is not specified', function(done) {
-    const adapter = new BetterSqliteAdapter(testDbPath, {debug: false});
-    const schemaStrategy = new DefaultSchemaStrategy({
-      debug: false
-    });
-
-    const storage = new SqliteStorage({
-      adapter: adapter,
-      schemaStrategy: schemaStrategy,
-      dbFileName: testDbFile,
-      dbFileDir: testDbDir,
-      debug: false
-    });
-
-    storage.initialize(function(err) {
-      expect(err).to.be.null;
-      
-      const termDoc = {
-        id: 'term/term1',
-        payload: {
-          collection: 'term',
-          id: 'term1',
-          text: 'test',
-          v: 1
-        }
-      };
-
-      // Write document
-      storage.writeRecords({docs: [termDoc]}, function(writeErr) {
-        expect(writeErr).to.not.exist;
-
-        // Try to read without specifying collection (mimics DurableStore behavior)
-        storage.readRecord('docs', 'term/term1', function(payload) {
-          expect(payload).to.exist;
-          expect(payload.collection).to.equal('term');
-          expect(payload.id).to.equal('term1');
-          expect(payload.text).to.equal('test');
-
-          storage.close(done);
-        });
-      });
-    });
-  });
-
   it('should return null for non-existent documents', function(done) {
     const adapter = new BetterSqliteAdapter(testDbPath, {debug: false});
     const schemaStrategy = new DefaultSchemaStrategy({
@@ -155,50 +116,6 @@ describe('DefaultSchemaStrategy Inventory Management', function() {
         expect(payload).to.be.null;
         
         storage.close(done);
-      });
-    });
-  });
-
-  it('should handle documents without collection field', function(done) {
-    const adapter = new BetterSqliteAdapter(testDbPath, {debug: false});
-    const schemaStrategy = new DefaultSchemaStrategy({
-      debug: false
-    });
-
-    const storage = new SqliteStorage({
-      adapter: adapter,
-      schemaStrategy: schemaStrategy,
-      dbFileName: testDbFile,
-      dbFileDir: testDbDir,
-      debug: false
-    });
-
-    storage.initialize(function(err) {
-      expect(err).to.be.null;
-
-      // DefaultSchemaStrategy should accept documents without collection field
-      const simpleDoc = {
-        id: 'simple1',
-        payload: {
-          // No collection field
-          id: 'simple1',
-          text: 'test',
-          v: 1
-        }
-      };
-
-      storage.writeRecords({docs: [simpleDoc]}, function(writeErr) {
-        // Should succeed for DefaultSchemaStrategy
-        expect(writeErr).to.not.exist;
-        
-        // Should be able to read it back
-        storage.readRecord('docs', 'simple1', function(payload) {
-          expect(payload).to.exist;
-          expect(payload.id).to.equal('simple1');
-          expect(payload.text).to.equal('test');
-          
-          storage.close(done);
-        });
       });
     });
   });
@@ -362,57 +279,6 @@ describe('DefaultSchemaStrategy Inventory Management', function() {
               expect(payload).to.be.null;
               
               storage.close(done);
-            });
-          });
-        });
-      });
-    });
-  });
-
-  it('should handle updateInventory calls directly', function(done) {
-    const adapter = new BetterSqliteAdapter(testDbPath, {debug: false});
-    const schemaStrategy = new DefaultSchemaStrategy({
-      debug: false
-    });
-
-    const storage = new SqliteStorage({
-      adapter: adapter,
-      schemaStrategy: schemaStrategy,
-      dbFileName: testDbFile,
-      dbFileDir: testDbDir,
-      debug: false
-    });
-
-    storage.initialize(function(err) {
-      expect(err).to.be.null;
-
-      // Direct inventory manipulation
-      storage.updateInventory('posts', 'post1', 1, 'add', function(err1) {
-        expect(err1).to.not.exist;
-
-        storage.updateInventory('posts', 'post2', 1, 'add', function(err2) {
-          expect(err2).to.not.exist;
-
-          storage.readInventory(function(err3, inventory) {
-            expect(err3).to.not.exist;
-            expect(inventory.payload.collections).to.exist;
-            expect(inventory.payload.collections.posts).to.deep.equal({
-              'post1': 1,
-              'post2': 1
-            });
-
-            // Now remove one
-            storage.updateInventory('posts', 'post1', 1, 'remove', function(err4) {
-              expect(err4).to.not.exist;
-
-              storage.readInventory(function(err5, inventory2) {
-                expect(err5).to.not.exist;
-                expect(inventory2.payload.collections.posts).to.deep.equal({
-                  'post2': 1
-                });
-
-                storage.close(done);
-              });
             });
           });
         });

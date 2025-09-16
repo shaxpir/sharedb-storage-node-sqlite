@@ -3,11 +3,16 @@ const fs = require('fs');
 const path = require('path');
 const BetterSqliteAdapter = require('../lib/adapters/better-sqlite-adapter');
 const AttachedBetterSqliteAdapter = require('../lib/adapters/attached-better-sqlite-adapter');
-const AttachedCollectionPerTableStrategy = require('../lib/schema/attached-collection-per-table-strategy');
+const AttachedCollectionPerTableStrategy = require('..').AttachedCollectionPerTableStrategy;
 const { initializeShareDBDatabase, verifyShareDBDatabase } = require('../lib/utils/sharedb-initializer');
+const { cleanupTestDatabases } = require('./test-cleanup');
 
 describe('ShareDB Initializer', function() {
   const TEST_DIR = path.join(__dirname, 'test-databases');
+
+  after(function() {
+    cleanupTestDatabases();
+  });
   const SHAREDB_DB = path.join(TEST_DIR, 'test-sharedb-init.db');
   const PRIMARY_DB = path.join(TEST_DIR, 'test-primary-init.db');
   
@@ -212,11 +217,12 @@ describe('ShareDB Initializer', function() {
       await primaryAdapter.disconnect();
       
       // Create strategy with collection config that requires indexes
+      // Using realistic field paths that match actual ShareDB document structure
       const strategy = new AttachedCollectionPerTableStrategy({
         attachmentAlias: 'sharedb',
         collectionConfig: {
           'test_collection': {
-            indexes: ['field1', 'field2']
+            indexes: ['payload.data.field1', 'payload.data.field2']
           }
         },
         createAdapterForPath: function(dbPath) {
@@ -232,7 +238,7 @@ describe('ShareDB Initializer', function() {
             { path: SHAREDB_DB, alias: 'sharedb' }
           ]
         },
-        { debug: false }
+        { debug: true }
       );
       
       // Set the strategy so the adapter can use it for pre-initialization
@@ -246,14 +252,17 @@ describe('ShareDB Initializer', function() {
           "SELECT name FROM sharedb.sqlite_master WHERE type='index'"
         );
         const indexNames = indexes.map(i => i.name);
-        
+
+        // Debug output to see what indexes were actually created
+        console.log('[Test] Indexes found in sharedb database:', indexNames);
+
         // Should have automatically created the missing inventory indexes
         assert(indexNames.includes('idx_inventory_collection'), 'Should have created idx_inventory_collection');
         assert(indexNames.includes('idx_inventory_updated'), 'Should have created idx_inventory_updated');
         
-        // Should have created indexes for the test collection
-        assert(indexNames.includes('test_collection_field1_idx'), 'Should have created test_collection_field1_idx');
-        assert(indexNames.includes('test_collection_field2_idx'), 'Should have created test_collection_field2_idx');
+        // Should have created indexes for the test collection with idx_ prefix and sanitized field paths
+        assert(indexNames.includes('idx_test_collection_payload_data_field1'), 'Should have created idx_test_collection_payload_data_field1');
+        assert(indexNames.includes('idx_test_collection_payload_data_field2'), 'Should have created idx_test_collection_payload_data_field2');
         
       } finally {
         await attachedAdapter.disconnect();

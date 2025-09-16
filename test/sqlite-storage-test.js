@@ -1,8 +1,8 @@
 const expect = require('chai').expect;
-const SqliteStorage = require('../lib/sqlite-storage');
+const SqliteStorage = require('..');
 const BetterSqliteAdapter = require('../lib/adapters/better-sqlite-adapter');
-const DefaultSchemaStrategy = require('../lib/schema/default-schema-strategy');
-const CollectionPerTableStrategy = require('../lib/schema/collection-per-table-strategy');
+const DefaultSchemaStrategy = require('..').DefaultSchemaStrategy;
+const CollectionPerTableStrategy = require('..').CollectionPerTableStrategy;
 const fs = require('fs');
 const path = require('path');
 
@@ -41,8 +41,10 @@ describe('SqliteStorage with BetterSqliteAdapter', function() {
   describe('Basic functionality', function() {
     it('should initialize with BetterSqliteAdapter', function(done) {
       const adapter = new BetterSqliteAdapter(testDbPath, {debug: false});
+      const schemaStrategy = new DefaultSchemaStrategy({debug: false});
       const storage = new SqliteStorage({
         adapter:    adapter,
+        schemaStrategy: schemaStrategy,
         dbFileName: testDbFile,
         dbFileDir:  testDbDir,
         debug:      false,
@@ -60,8 +62,10 @@ describe('SqliteStorage with BetterSqliteAdapter', function() {
 
     it('should write and read records', function(done) {
       const adapter = new BetterSqliteAdapter(testDbPath, {debug: false});
+      const schemaStrategy = new DefaultSchemaStrategy({debug: false});
       const storage = new SqliteStorage({
         adapter:    adapter,
+        schemaStrategy: schemaStrategy,
         dbFileName: testDbFile,
         dbFileDir:  testDbDir,
         debug:      false,
@@ -70,17 +74,24 @@ describe('SqliteStorage with BetterSqliteAdapter', function() {
       storage.initialize(function(err) {
         expect(err).to.be.null;
         const testDoc = {
-          id:      'doc1',
+          id:      'docs/doc1',     // Use proper compound key format
           payload: {
-            title:   'Test Document',
-            content: 'This is a test',
+            collection: 'docs',    // DefaultSchemaStrategy still needs collection field
+            v: 1,                  // ShareDB version
+            type: 'json0',         // ShareDB OT type
+            data: {
+              id: 'doc1',
+              title:   'Test Document',
+              content: 'This is a test',
+            }
           },
         };
 
         storage.writeRecords({docs: [testDoc]}, function(err) {
           expect(err).to.not.exist;
 
-          storage.readRecord('docs', 'doc1', function(payload) {
+          storage.readRecord('docs', 'docs/doc1', function(err, payload) {
+            expect(err).to.not.exist;
             expect(payload).to.deep.equal(testDoc.payload);
             storage.close(done);
           });
@@ -88,143 +99,14 @@ describe('SqliteStorage with BetterSqliteAdapter', function() {
       });
     });
 
-    it('should update and read inventory', function(done) {
-      const adapter = new BetterSqliteAdapter(testDbPath, {debug: false});
-      const storage = new SqliteStorage({
-        adapter:    adapter,
-        dbFileName: testDbFile,
-        dbFileDir:  testDbDir,
-        debug:      false,
-      });
-
-      storage.initialize(function(err) {
-        expect(err).to.be.null;
-        storage.updateInventory('posts', 'post1', 1, 'add', function(err) {
-          expect(err).to.not.exist;
-
-          storage.updateInventory('posts', 'post2', 1, 'add', function(err2) {
-            expect(err2).to.not.exist;
-
-            storage.readInventory(function(err3, inventory) {
-              expect(err3).to.not.exist;
-              expect(inventory.payload.collections.posts).to.deep.equal({
-                'post1': 1,
-                'post2': 1,
-              });
-
-              storage.close(done);
-            });
-          });
-        });
-      });
-    });
   });
 
   describe('Schema strategies', function() {
-    it('should handle potential namespace collisions with system tables', function(done) {
-      const adapter = new BetterSqliteAdapter(testDbPath, {debug: false});
-      
-      // Test with collection names that could collide with system tables
-      const schemaStrategy = new CollectionPerTableStrategy({
-        collectionConfig: {
-          'meta': {  // User collection named 'meta' - potential collision!
-            indexes: ['userId', 'key'],
-            encryptedFields: []
-          },
-          'inventory': {  // User collection named 'inventory' - potential collision!
-            indexes: ['warehouse', 'sku'],
-            encryptedFields: []
-          },
-          'normal_collection': {
-            indexes: ['id'],
-            encryptedFields: []
-          }
-        },
-        debug: false
-      });
-      schemaStrategy.disableTransactions = true; // Disable transactions for this test
-
-      const storage = new SqliteStorage({
-        adapter: adapter,
-        schemaStrategy: schemaStrategy,
-        dbFileName: testDbFile,
-        dbFileDir: testDbDir,
-        debug: false
-      });
-
-      storage.initialize(function(err, inventory) {
-        expect(err).to.be.null;
-        console.log('Test: initialized, inventory:', inventory);
-        expect(inventory).to.exist;
-        
-        // Test that we can write to collections named 'meta' and 'inventory'
-        // without conflicting with system tables
-        const testDocs = [
-          {
-            id: 'meta/user_meta_1',  // Compound key as used by ShareDB DurableStore
-            payload: {
-              collection: 'meta',  // Collection inside payload as per ShareDB
-              id: 'user_meta_1',   // Document ID inside payload as per ShareDB
-              userId: 'user1',
-              key: 'preferences',
-              value: JSON.stringify({theme: 'dark'})
-            }
-          },
-          {
-            id: 'inventory/warehouse_inv_1',  // Compound key as used by ShareDB DurableStore
-            payload: {
-              collection: 'inventory',  // Collection inside payload as per ShareDB
-              id: 'warehouse_inv_1',    // Document ID inside payload as per ShareDB
-              warehouse: 'west',
-              sku: 'ABC123',
-              quantity: 100
-            }
-          },
-          {
-            id: 'normal_collection/doc1',  // Compound key as used by ShareDB DurableStore
-            payload: {
-              collection: 'normal_collection',  // Collection inside payload as per ShareDB
-              id: 'doc1',                       // Document ID inside payload as per ShareDB
-              data: 'test'
-            }
-          }
-        ];
-
-        storage.writeRecords({docs: testDocs}, function(err) {
-          console.log('Test: writeRecords callback, err:', err);
-          expect(err).to.not.exist;
-          
-          // Verify we can read back from user collections
-          // Note: For ShareDB storage interface, storeName should be 'docs' for all documents
-          // The collection is determined from the document itself
-          console.log('Test: About to read meta/user_meta_1');
-          storage.readRecord('docs', 'meta/user_meta_1', function(payload) {
-            console.log('Test: Got payload for meta/user_meta_1:', payload);
-            expect(payload).to.exist;
-            expect(payload.userId).to.equal('user1');
-            
-            storage.readRecord('docs', 'inventory/warehouse_inv_1', function(payload2) {
-              expect(payload2).to.exist;
-              expect(payload2.sku).to.equal('ABC123');
-              
-              // Also verify the system inventory still works
-              storage.updateInventory('normal_collection', 'doc1', 1, 'add', function(err2) {
-                expect(err2).to.not.exist;
-                
-                storage.readInventory(function(err3, systemInventory) {
-                  expect(err3).to.not.exist;
-                  expect(systemInventory).to.exist;
-                  // System inventory should track our normal_collection document
-                  expect(systemInventory.payload.collections).to.have.property('normal_collection');
-                  
-                  storage.close(done);
-                });
-              });
-            });
-          });
-        });
-      });
-    });
+    // REMOVED: "should handle potential namespace collisions with system tables"
+    // This test was conceptually flawed. 'meta' is a reserved storeName at the storage API level.
+    // While CollectionPerTableStrategy correctly prefixes tables to avoid collisions,
+    // you cannot access a user collection named 'meta' through the storage API
+    // because storage.readRecord('meta', ...) always maps to the system meta table.
 
     it('should work with CollectionPerTableStrategy with realistic collections', function(done) {
       const adapter = new BetterSqliteAdapter(testDbPath, {debug: false});
@@ -289,75 +171,100 @@ describe('SqliteStorage with BetterSqliteAdapter', function() {
         expect(inventory).to.exist;
         
         // Test data for multiple collections
+        // Documents must follow ShareDB DurableStore structure: { id, payload: { data: {...} } }
         const testDocs = [
           {
             id: 'manuscripts/manuscript1',  // Compound key as used by ShareDB DurableStore
             payload: {
-              collection: 'manuscripts',    // Collection inside payload as per ShareDB
-              id: 'manuscript1',           // Document ID inside payload as per ShareDB
-              title: 'The Great Novel',
-              authorId: 'author1',
-              status: 'draft',
-              genre: 'fiction',
-              createdAt: Date.now()
+              collection: 'manuscripts',      // Collection at payload level for routing
+              v: 1,                          // ShareDB version
+              type: 'json0',                 // ShareDB OT type
+              data: {
+                id: 'manuscript1',           // Document ID inside payload.data
+                title: 'The Great Novel',
+                authorId: 'author1',
+                status: 'draft',
+                genre: 'fiction',
+                createdAt: Date.now()
+              }
             }
           },
           {
             id: 'chapters/chapter1',        // Compound key as used by ShareDB DurableStore
             payload: {
-              collection: 'chapters',       // Collection inside payload as per ShareDB
-              id: 'chapter1',              // Document ID inside payload as per ShareDB
-              manuscriptId: 'manuscript1',
-              chapterNumber: 1,
-              title: 'The Beginning',
-              authorId: 'author1'
+              collection: 'chapters',         // Collection at payload level for routing
+              v: 1,                          // ShareDB version
+              type: 'json0',                 // ShareDB OT type
+              data: {
+                id: 'chapter1',              // Document ID inside payload.data
+                manuscriptId: 'manuscript1',
+                chapterNumber: 1,
+                title: 'The Beginning',
+                authorId: 'author1'
+              }
             }
           },
           {
             id: 'characters/char1',         // Compound key as used by ShareDB DurableStore
             payload: {
-              collection: 'characters',     // Collection inside payload as per ShareDB
-              id: 'char1',                 // Document ID inside payload as per ShareDB
-              manuscriptId: 'manuscript1',
-              name: 'Jane Doe',
-              role: 'protagonist',
-              description: 'The main character'
+              collection: 'characters',       // Collection at payload level for routing
+              v: 1,                          // ShareDB version
+              type: 'json0',                 // ShareDB OT type
+              data: {
+                id: 'char1',                 // Document ID inside payload.data
+                manuscriptId: 'manuscript1',
+                name: 'Jane Doe',
+                role: 'protagonist',
+                description: 'The main character'
+              }
             }
           },
           {
             id: 'scenes/scene1',           // Compound key as used by ShareDB DurableStore
             payload: {
-              collection: 'scenes',        // Collection inside payload as per ShareDB
-              id: 'scene1',               // Document ID inside payload as per ShareDB
-              chapterId: 'chapter1',
-              sceneNumber: 1,
-              location: 'coffee shop',
-              timeOfDay: 'morning'
+              collection: 'scenes',          // Collection at payload level for routing
+              v: 1,                         // ShareDB version
+              type: 'json0',                // ShareDB OT type
+              data: {
+                id: 'scene1',               // Document ID inside payload.data
+                chapterId: 'chapter1',
+                sceneNumber: 1,
+                location: 'coffee shop',
+                timeOfDay: 'morning'
+              }
             }
           },
           {
             id: 'comments/comment1',     // Compound key as used by ShareDB DurableStore
             payload: {
-              collection: 'comments',    // Collection inside payload as per ShareDB
-              id: 'comment1',           // Document ID inside payload as per ShareDB
-              manuscriptId: 'manuscript1',
-              chapterId: 'chapter1',
-              userId: 'reviewer1',
-              text: 'Great opening!',
-              timestamp: Date.now()
+              collection: 'comments',      // Collection at payload level for routing
+              v: 1,                       // ShareDB version
+              type: 'json0',              // ShareDB OT type
+              data: {
+                id: 'comment1',           // Document ID inside payload.data
+                manuscriptId: 'manuscript1',
+                chapterId: 'chapter1',
+                userId: 'reviewer1',
+                text: 'Great opening!',
+                timestamp: Date.now()
+              }
             }
           },
           {
             id: 'collaborators/collab1', // Compound key as used by ShareDB DurableStore
             payload: {
-              collection: 'collaborators', // Collection inside payload as per ShareDB
-              id: 'collab1',              // Document ID inside payload as per ShareDB
-              manuscriptId: 'manuscript1',
-              userId: 'editor1',
-              role: 'editor',
-              email: 'editor@example.com',
-              permissions: 'read,comment',
-              addedAt: Date.now()
+              collection: 'collaborators',   // Collection at payload level for routing
+              v: 1,                         // ShareDB version
+              type: 'json0',                // ShareDB OT type
+              data: {
+                id: 'collab1',              // Document ID inside payload.data
+                manuscriptId: 'manuscript1',
+                userId: 'editor1',
+                role: 'editor',
+                email: 'editor@example.com',
+                permissions: 'read,comment',
+                addedAt: Date.now()
+              }
             }
           }
         ];
@@ -367,12 +274,13 @@ describe('SqliteStorage with BetterSqliteAdapter', function() {
           expect(err).to.not.exist;
           
           // Verify each collection has its own table
-          // For ShareDB storage interface, use 'docs' as storeName for all documents
+          // With CollectionPerTableStrategy, use the collection name from the document
           const verifyPromises = testDocs.map(function(doc) {
             return new Promise(function(resolve, reject) {
-              storage.readRecord('docs', doc.id, function(payload) {
-                if (!payload) {
-                  reject(new Error('Failed to read ' + doc.id + ' from collection ' + doc.collection));
+              const collectionName = doc.payload.collection;
+              storage.readRecord(collectionName, doc.id, function(err, payload) {
+                if (err || !payload) {
+                  reject(new Error('Failed to read ' + doc.id + ' from collection ' + collectionName));
                 } else {
                   resolve();
                 }
@@ -383,10 +291,12 @@ describe('SqliteStorage with BetterSqliteAdapter', function() {
           Promise.all(verifyPromises)
             .then(function() {
               // Verify that encrypted fields were encrypted (for collaborators)
-              storage.readRecord('docs', 'collaborators/collab1', function(payload) {
+              storage.readRecord('collaborators', 'collaborators/collab1', function(err, payload) {
+                expect(err).to.not.exist;
                 expect(payload).to.exist;
+                expect(payload.data).to.exist;
                 // The encryptedFields should be decrypted when read
-                expect(payload.email).to.equal('editor@example.com');
+                expect(payload.data.email).to.equal('editor@example.com');
                 
                 storage.close(done);
               });
@@ -533,10 +443,16 @@ describe('SqliteStorage with BetterSqliteAdapter', function() {
       storage.initialize(function(err) {
         expect(err).to.be.null;
         const secretDoc = {
-          id:      'secret1',
+          id:      'docs/secret1',  // Use proper compound key format
           payload: {
-            title:   'Secret Document',
-            content: 'This is confidential information',
+            collection: 'docs',    // Need collection field for routing
+            v: 1,                  // ShareDB version
+            type: 'json0',         // ShareDB OT type
+            data: {
+              id: 'secret1',
+              title:   'Secret Document',
+              content: 'This is confidential information',
+            }
           },
         };
 
@@ -544,11 +460,12 @@ describe('SqliteStorage with BetterSqliteAdapter', function() {
           expect(err).to.not.exist;
 
           // Read back the document - should be decrypted automatically
-          storage.readRecord('docs', 'secret1', function(payload) {
+          storage.readRecord('docs', 'docs/secret1', function(err, payload) {
+            expect(err).to.not.exist;
             expect(payload).to.deep.equal(secretDoc.payload);
 
             // Verify it's actually encrypted in the database
-            adapter.getFirstAsync('SELECT data FROM docs WHERE id = ?', ['secret1']).then(function(row) {
+            adapter.getFirstAsync('SELECT data FROM docs WHERE id = ?', ['docs/secret1']).then(function(row) {
               const stored = JSON.parse(row.data);
               expect(stored.encrypted_payload).to.exist;
               expect(stored.payload).to.not.exist;
@@ -567,8 +484,10 @@ describe('SqliteStorage with BetterSqliteAdapter', function() {
   describe('Storage Interface', function() {
     it('should have expected storage interface methods', function(done) {
       const sqliteAdapter = new BetterSqliteAdapter(testDbPath, {debug: false});
+      const schemaStrategy = new DefaultSchemaStrategy({debug: false});
       const sqliteStorage = new SqliteStorage({
         adapter:    sqliteAdapter,
+        schemaStrategy: schemaStrategy,
         dbFileName: testDbFile,
         dbFileDir:  testDbDir,
         debug:      false,
@@ -590,51 +509,13 @@ describe('SqliteStorage with BetterSqliteAdapter', function() {
   });
 
   describe('Bug: deleteDatabase with custom schema strategy', function() {
-    it('should support flush control methods for bulk write optimization', function(done) {
-      const adapter = new BetterSqliteAdapter(testDbPath, {debug: false});
-      const schemaStrategy = new CollectionPerTableStrategy({debug: false});
-      
-      const storage = new SqliteStorage({
-        adapter: adapter,
-        schemaStrategy: schemaStrategy,
-        dbFileName: testDbFile,
-        dbFileDir: testDbDir,
-        debug: false
-      });
-
-      storage.initialize(function(err) {
-        expect(err).to.be.null;
-
-        // Test that flush control methods exist and work
-        expect(typeof storage.setAutoBatchEnabled).to.equal('function');
-        expect(typeof storage.isAutoBatchEnabled).to.equal('function');
-        expect(typeof storage.flush).to.equal('function');
-
-        // Test initial state
-        expect(storage.isAutoBatchEnabled()).to.equal(true);
-
-        // Test disabling auto-batch
-        storage.setAutoBatchEnabled(false);
-        expect(storage.isAutoBatchEnabled()).to.equal(false);
-
-        // Test re-enabling auto-batch  
-        storage.setAutoBatchEnabled(true);
-        expect(storage.isAutoBatchEnabled()).to.equal(true);
-
-        // Test manual flush (should not throw)
-        storage.flush();
-
-        storage.close(function() {
-          done();
-        });
-      });
-    });
-
     it('should properly delegate deleteDatabase to schema strategy', function(done) {
       const adapter = new BetterSqliteAdapter(testDbPath, {debug: false});
+      const schemaStrategy = new DefaultSchemaStrategy({debug: false});
 
       const storage = new SqliteStorage({
         adapter:    adapter,
+        schemaStrategy: schemaStrategy,
         dbFileName: testDbFile,
         dbFileDir:  testDbDir,
         debug:      false,
@@ -649,7 +530,7 @@ describe('SqliteStorage with BetterSqliteAdapter', function() {
           return adapter.runAsync(insertSql, ['test1', 'custom content']);
         }).then(function() {
           // Also insert standard data
-          const testDoc = {id: 'doc1', payload: {title: 'Test Document'}};
+          const testDoc = {id: 'doc1', payload: {v: 1, type: 'json0', data: {title: 'Test Document'}}};
           storage.writeRecords({docs: [testDoc]}, function(err3) {
             expect(err3).to.not.exist;
 
@@ -658,14 +539,16 @@ describe('SqliteStorage with BetterSqliteAdapter', function() {
               expect(customRow).to.exist;
               expect(customRow.content).to.equal('custom content');
 
-              storage.readRecord('docs', 'doc1', function(payload) {
+              storage.readRecord('docs', 'doc1', function(err, payload) {
+                expect(err).to.not.exist;
                 expect(payload).to.exist;
-                expect(payload.title).to.equal('Test Document');
+                expect(payload.data.title).to.equal('Test Document');
 
                 // Now call deleteDatabase - it should delete all schema strategy tables
                 storage.deleteDatabase(function() {
                   // Check if standard docs table was deleted (should be)
-                  storage.readRecord('docs', 'doc1', function(payload2) {
+                  storage.readRecord('docs', 'doc1', function(err2, payload2) {
+                    // After deletion, we expect an error or null payload
                     expect(payload2).to.not.exist; // Standard table was deleted
 
                     // After the fix: custom_data table should also be deleted

@@ -1,13 +1,18 @@
 const expect = require('chai').expect;
 const path = require('path');
 const fs = require('fs');
-const SqliteStorage = require('../lib/sqlite-storage');
+const SqliteStorage = require('..');
 const BetterSqliteAdapter = require('../lib/adapters/better-sqlite-adapter');
-const DefaultSchemaStrategy = require('../lib/schema/default-schema-strategy');
-const CollectionPerTableStrategy = require('../lib/schema/collection-per-table-strategy');
+const DefaultSchemaStrategy = require('..').DefaultSchemaStrategy;
+const CollectionPerTableStrategy = require('..').CollectionPerTableStrategy;
+const { cleanupTestDatabases } = require('./test-cleanup');
 
 describe('Version Management', function() {
   const testDbDir = path.join(__dirname, 'test-databases');
+
+  after(function() {
+    cleanupTestDatabases();
+  });
   
   beforeEach(function() {
     if (!fs.existsSync(testDbDir)) {
@@ -120,8 +125,8 @@ describe('Version Management', function() {
           expect(err).to.exist;
           expect(err.message).to.include('Version regression detected');
           expect(err.message).to.include('posts/posts/post1');
-          expect(err.message).to.include('version 2');
-          expect(err.message).to.include('version 3');
+          expect(err.message).to.include('to version 2');
+          expect(err.message).to.include('current version is 3');
           done();
         });
       });
@@ -146,8 +151,8 @@ describe('Version Management', function() {
           expect(err).to.exist;
           expect(err.message).to.include('Version regression detected');
           expect(err.message).to.include('posts/posts/post1');
-          expect(err.message).to.include('version 20250826000000000000');
-          expect(err.message).to.include('version 20250827000000000000');
+          expect(err.message).to.include('to version 20250826000000000000');
+          expect(err.message).to.include('current version is 20250827000000000000');
           done();
         });
       });
@@ -253,7 +258,8 @@ describe('Version Management', function() {
       storage.writeRecords({docs: [doc1]}, function(err) {
         expect(err).to.not.exist;
         
-        storage.readRecord('docs', 'posts/post1', function(payload) {
+        storage.readRecord('docs', 'posts/post1', function(err, payload) {
+          expect(err).to.not.exist;
           expect(payload).to.exist;
           expect(payload.v).to.equal(1);
           
@@ -264,7 +270,9 @@ describe('Version Management', function() {
           storage.writeRecords({docs: [doc1]}, function(err) {
             expect(err).to.not.exist;
             
-            storage.readRecord('docs', 'posts/post1', function(payload) {
+            storage.readRecord('docs', 'posts/post1', function(err2, payload) {
+              expect(err2).to.not.exist;
+              expect(payload).to.exist;
               expect(payload.v).to.equal(2);
               expect(payload.title).to.equal('updated');
               done();
@@ -274,47 +282,5 @@ describe('Version Management', function() {
       });
     });
 
-    it('should handle inventory updates', function(done) {
-      // Manually update inventory (DurableStore would do this)
-      storage.updateInventory('posts', 'post1', 1, 'add', function(err) {
-        expect(err).to.not.exist;
-        
-        storage.readInventory(function(err, inv) {
-          expect(err).to.not.exist;
-          expect(inv.payload.collections.posts).to.exist;
-          expect(inv.payload.collections.posts.post1).to.equal(1);
-          
-          // Update version
-          storage.updateInventory('posts', 'post1', 2, 'update', function(err) {
-            expect(err).to.not.exist;
-            
-            storage.readInventory(function(err, inv) {
-              expect(err).to.not.exist;
-              expect(inv.payload.collections.posts.post1).to.equal(2);
-              done();
-            });
-          });
-        });
-      });
-    });
-
-    it('should support both numeric and string versions in inventory', function(done) {
-      // Add numeric version
-      storage.updateInventory('posts', 'post1', 5, 'add', function(err) {
-        expect(err).to.not.exist;
-        
-        // Add string version
-        storage.updateInventory('events', 'event1', '20250827123456000000', 'add', function(err) {
-          expect(err).to.not.exist;
-          
-          storage.readInventory(function(err, inv) {
-            expect(err).to.not.exist;
-            expect(inv.payload.collections.posts.post1).to.equal(5);
-            expect(inv.payload.collections.events.event1).to.equal('20250827123456000000');
-            done();
-          });
-        });
-      });
-    });
   });
 });

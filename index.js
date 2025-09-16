@@ -1,13 +1,17 @@
-// Main export is SqliteStorage (the generic storage class)
-var SqliteStorage = require('./lib/sqlite-storage');
+// Import from upstream shared library
+var upstream = require('@shaxpir/sharedb-storage-sqlite');
+
+// Main export is SqliteStorage from upstream
+var SqliteStorage = upstream.SqliteStorage;
 module.exports = SqliteStorage;
 
-// Attach all exports to SqliteStorage
+// Re-export everything from upstream for convenience
 SqliteStorage.SqliteStorage = SqliteStorage;
+SqliteStorage.BaseSchemaStrategy = upstream.BaseSchemaStrategy;
+SqliteStorage.DefaultSchemaStrategy = upstream.DefaultSchemaStrategy;
+SqliteStorage.CollectionPerTableStrategy = upstream.CollectionPerTableStrategy;
+SqliteStorage.AttachedCollectionPerTableStrategy = upstream.AttachedCollectionPerTableStrategy;
 
-// Node.js adapter - no conditional loading needed since this is Node.js only
+// Node.js specific adapters
 SqliteStorage.BetterSqliteAdapter = require('./lib/adapters/better-sqlite-adapter');
-
-// Schema Strategies
-SqliteStorage.DefaultSchemaStrategy = require('./lib/schema/default-schema-strategy');
-SqliteStorage.CollectionPerTableStrategy = require('./lib/schema/collection-per-table-strategy');
+SqliteStorage.AttachedBetterSqliteAdapter = require('./lib/adapters/attached-better-sqlite-adapter');

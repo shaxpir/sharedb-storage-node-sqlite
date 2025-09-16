@@ -1,12 +1,17 @@
 const expect = require('chai').expect;
 const path = require('path');
 const fs = require('fs');
-const SqliteStorage = require('../lib/sqlite-storage');
+const SqliteStorage = require('..');
 const BetterSqliteAdapter = require('../lib/adapters/better-sqlite-adapter');
-const CollectionPerTableStrategy = require('../lib/schema/collection-per-table-strategy');
+const CollectionPerTableStrategy = require('..').CollectionPerTableStrategy;
+const { cleanupTestDatabases } = require('./test-cleanup');
 
 describe('Debug Inventory', function() {
   this.timeout(10000);
+
+  after(function() {
+    cleanupTestDatabases();
+  });
   
   it('should check inventory after write', function(done) {
     const testDbDir = path.join(__dirname, 'test-databases');
@@ -63,15 +68,15 @@ describe('Debug Inventory', function() {
         const inventoryRows = db.prepare('SELECT * FROM sharedb_inventory').all();
         console.log('Inventory table contents:', inventoryRows);
         
-        // Check what's in the term table
-        const termRows = db.prepare('SELECT * FROM term').all();
+        // Check what's in the term table (CollectionPerTableStrategy uses 'collection_' prefix)
+        const termRows = db.prepare('SELECT * FROM collection_term').all();
         console.log('Term table contents:', termRows);
         
         // Now try reading through the API
         console.log('Reading through API...');
-        storage.readRecord('docs', 'term/term1', function(payload) {
+        storage.readRecord('term', 'term/term1', function(payload) {
           console.log('Read result:', payload);
-          
+
           storage.close(done);
         });
       });
