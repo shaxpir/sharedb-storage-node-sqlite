@@ -5,12 +5,25 @@
 /// <reference types="node" />
 
 import { EventEmitter } from 'events';
-import { 
-  DurableStorage, 
-  DurableStorageRecord, 
-  DurableStorageRecords, 
-  DurableStorageCallback 
+import {
+  DurableStorage,
+  DurableStorageRecord,
+  DurableStorageRecords,
+  DurableStorageCallback
 } from '@shaxpir/sharedb';
+
+// Re-export types from the base library
+import {
+  SqliteAdapter as BaseSqliteAdapter,
+  SchemaStrategy,
+  SchemaStrategyOptions,
+  AttachedCollectionPerTableStrategyOptions,
+  CollectionConfig,
+  DatabaseAttachment,
+  ProjectionColumnMapping,
+  ProjectionIndexConfig,
+  ArrayProjectionConfig
+} from '@shaxpir/sharedb-storage-sqlite';
 
 declare namespace ShareDBSQLiteStorage {
   // ===============================
@@ -74,20 +87,6 @@ declare namespace ShareDBSQLiteStorage {
   // Adapter Implementations
   // ===============================
 
-  interface ExpoSqliteAdapter extends SqliteAdapter {
-    readonly dirPath: string;
-    readonly fileName: string;
-    readonly debug: boolean;
-  }
-
-  interface ExpoSqliteAdapterStatic {
-    new (fileName: string, dirPath: string, debug?: boolean): ExpoSqliteAdapter;
-    
-    // Convenient static factory method
-    createWithDocumentDirectory(fileName: string, debug?: boolean): ExpoSqliteAdapter;
-    checkDatabaseExists(fileName: string, dirPath?: string): Promise<boolean>;
-    copyDatabase(fromPath: string, fileName: string, dirPath?: string): Promise<void>;
-  }
 
   interface BetterSqliteAdapter extends SqliteAdapter {
     readonly dbPath: string;
@@ -237,16 +236,12 @@ declare namespace ShareDBSQLiteStorage {
   }
 
   interface AttachedCollectionPerTableStrategy extends CollectionPerTableStrategy {
-    attachmentAlias: string | null;
-    preInitializeDatabase(db: any, strategy: AttachedCollectionPerTableStrategy, callback?: Callback): Promise<void>;
-    createProjectionTablesAttached(db: DatabaseConnection, collection: string): Promise<void>;
-    updateArrayExpansionProjection(db: DatabaseConnection, projection: ArrayProjectionConfig, newRecord: any, oldRecord: any): Promise<void>;
-    deleteProjections(db: DatabaseConnection, collection: string, recordId: string): Promise<void>;
+    readonly attachmentAlias: string | null;
+    preInitializeDatabase(dbPath: string, createAdapter: (dbPath: string) => SqliteAdapter): Promise<void>;
   }
 
   interface AttachedCollectionPerTableStrategyStatic {
-    new (attachmentAlias?: string): AttachedCollectionPerTableStrategy;
-    preInitializeDatabase(db: any, strategy: AttachedCollectionPerTableStrategy, callback?: Callback): Promise<void>;
+    new (options?: AttachedCollectionPerTableStrategyOptions): AttachedCollectionPerTableStrategy;
   }
 
 }
@@ -259,9 +254,7 @@ declare namespace ShareDBSQLiteStorage {
 export default SqliteStorage;
 declare const SqliteStorage: ShareDBSQLiteStorage.SqliteStorageStatic & {
   SqliteStorage: ShareDBSQLiteStorage.SqliteStorageStatic;
-  ExpoSqliteAdapter: ShareDBSQLiteStorage.ExpoSqliteAdapterStatic;
   BetterSqliteAdapter: ShareDBSQLiteStorage.BetterSqliteAdapterStatic;
-  NodeSqliteAdapter: ShareDBSQLiteStorage.NodeSqliteAdapterStatic;
   AttachedBetterSqliteAdapter: ShareDBSQLiteStorage.AttachedBetterSqliteAdapterStatic;
   AttachedCollectionPerTableStrategy: ShareDBSQLiteStorage.AttachedCollectionPerTableStrategyStatic;
   DefaultSchemaStrategy: ShareDBSQLiteStorage.DefaultSchemaStrategyStatic;
