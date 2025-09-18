@@ -68,8 +68,8 @@ describe('Debug Inventory', function() {
         const inventoryRows = db.prepare('SELECT * FROM sharedb_inventory').all();
         console.log('Inventory table contents:', inventoryRows);
         
-        // Check what's in the term table (CollectionPerTableStrategy uses 'collection_' prefix)
-        const termRows = db.prepare('SELECT * FROM collection_term').all();
+        // Check what's in the term table (CollectionPerTableStrategy no longer uses 'collection_' prefix)
+        const termRows = db.prepare('SELECT * FROM term').all();
         console.log('Term table contents:', termRows);
         
         // Now try reading through the API
