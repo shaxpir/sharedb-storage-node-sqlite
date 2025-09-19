@@ -1,17 +1,19 @@
-// Import from upstream shared library
-var upstream = require('@shaxpir/sharedb-storage-sqlite');
+/**
+ * @shaxpir/sharedb-storage-node-sqlite
+ *
+ * Standalone SQLite adapter for Node.js using better-sqlite3.
+ * This package provides database adapters only - no storage strategies.
+ * For ShareDB storage strategies, use @shaxpir/sharedb-storage-sqlite.
+ */
 
-// Main export is SqliteStorage from upstream
-var SqliteStorage = upstream.SqliteStorage;
-module.exports = SqliteStorage;
+// Export the main adapter
+exports.BetterSqliteAdapter = require('./lib/adapters/better-sqlite-adapter');
 
-// Re-export everything from upstream for convenience
-SqliteStorage.SqliteStorage = SqliteStorage;
-SqliteStorage.BaseSchemaStrategy = upstream.BaseSchemaStrategy;
-SqliteStorage.DefaultSchemaStrategy = upstream.DefaultSchemaStrategy;
-SqliteStorage.CollectionPerTableStrategy = upstream.CollectionPerTableStrategy;
-SqliteStorage.AttachedCollectionPerTableStrategy = upstream.AttachedCollectionPerTableStrategy;
+// Export the attached adapter wrapper
+exports.AttachedBetterSqliteAdapter = require('./lib/adapters/attached-better-sqlite-adapter');
 
-// Node.js specific adapters
-SqliteStorage.BetterSqliteAdapter = require('./lib/adapters/better-sqlite-adapter');
-SqliteStorage.AttachedBetterSqliteAdapter = require('./lib/adapters/attached-better-sqlite-adapter');
+// Export utilities if needed by consumers
+exports.RetryUtils = require('./lib/utils/retry-utils');
+
+// Default export is the basic adapter for convenience
+module.exports = exports.BetterSqliteAdapter;
